@@ -38,8 +38,8 @@ const TypeCard = ({ type, icon: Icon, title, description, isSelected, onClick }:
         type="button"
         onClick={onClick}
         className={`p-4 rounded-xl border-2 text-left transition-all ${isSelected
-                ? 'border-primary-600 bg-primary-50'
-                : 'border-gray-200 hover:border-gray-300'
+            ? 'border-primary-600 bg-primary-50'
+            : 'border-gray-200 hover:border-gray-300'
             }`}
     >
         <Icon size={24} className={isSelected ? 'text-primary-600' : 'text-gray-400'} />
@@ -115,12 +115,16 @@ export default function AddPropertyPage() {
         insuranceIncluded: false as boolean
     });
 
-    // Auth check
+    // Auth check - allow both owners and admins
     useEffect(() => {
-        if (!authLoading && (!isAuthenticated || user?.role !== 'owner')) {
+        if (!authLoading && (!isAuthenticated || (user?.role !== 'owner' && user?.role !== 'admin'))) {
             router.push('/');
         }
     }, [authLoading, isAuthenticated, user, router]);
+
+    // Determine if user is admin (can add all types) or owner (stays only)
+    const isAdmin = user?.role === 'admin';
+    const isOwner = user?.role === 'owner';
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
         const { name, value, type } = e.target;
@@ -134,6 +138,12 @@ export default function AddPropertyPage() {
         e.preventDefault();
         if (!user) return;
 
+        // Safety validation: Owners cannot add cars or flights
+        if (isOwner && (propertyType === 'car' || propertyType === 'flight')) {
+            toast.error('Permission Denied', 'Property owners can only list stays (apartments, villas, houses).');
+            return;
+        }
+
         setIsSubmitting(true);
 
         try {
@@ -142,7 +152,7 @@ export default function AddPropertyPage() {
 
             const baseData: CreatePropertyData = {
                 ownerId: user.id,
-                ownerName: user.name,
+                ownerName: user.name || `${user.firstName} ${user.lastName}`.trim() || 'Unknown',
                 ownerEmail: user.email,
                 type: propertyType,
                 title: formData.title,
@@ -150,6 +160,8 @@ export default function AddPropertyPage() {
                 price: parseFloat(formData.price),
                 location: formData.location,
                 images: [imageUrl],
+                // Status based on role: Owners need approval, Admins auto-approve
+                status: isOwner ? 'PENDING' : 'APPROVED',
             };
 
             let propertyData: CreatePropertyData = baseData;
@@ -157,7 +169,8 @@ export default function AddPropertyPage() {
             if (propertyType === 'hotel') {
                 propertyData = {
                     ...baseData,
-                    starRating: parseInt(formData.starRating) as 1 | 2 | 3 | 4 | 5,
+                    // Star Rating only for admins (hotels), owners don't set this
+                    ...(isAdmin ? { starRating: parseInt(formData.starRating) as 1 | 2 | 3 | 4 | 5 } : {}),
                     amenities: formData.amenities.split(',').map(a => a.trim()).filter(Boolean),
                     roomType: formData.roomType,
                     maxGuests: parseInt(formData.maxGuests),
@@ -166,6 +179,8 @@ export default function AddPropertyPage() {
                     address: formData.address,
                     city: formData.city,
                     country: formData.country,
+                    // For owners: mark as residential stay requiring approval
+                    ...(isOwner ? { isInstantBook: false, propertyCategory: formData.roomType } : {}),
                 };
             } else if (propertyType === 'flight') {
                 propertyData = {
@@ -253,33 +268,56 @@ export default function AddPropertyPage() {
                 <form onSubmit={handleSubmit} className="max-w-3xl mx-auto">
                     {/* Property Type Selection */}
                     <div className="card p-6 mb-6">
-                        <h2 className="text-lg font-semibold mb-4">Property Type</h2>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <h2 className="text-lg font-semibold mb-4">
+                            Property Type
+                            {isOwner && (
+                                <span className="text-sm font-normal text-gray-500 ml-2">
+                                    (Owners can only list stays)
+                                </span>
+                            )}
+                        </h2>
+                        <div className={`grid grid-cols-1 gap-4 ${isAdmin ? 'md:grid-cols-3' : 'md:grid-cols-1'}`}>
+                            {/* Stay/Hotel - Always visible */}
                             <TypeCard
                                 type="hotel"
                                 icon={Building2}
-                                title="Stay / Hotel"
-                                description="Rooms, apartments, villas"
+                                title={isOwner ? 'Residential Stay' : 'Stay / Hotel'}
+                                description={isOwner ? 'Apartment, Villa, House, Guest House' : 'Rooms, apartments, villas'}
                                 isSelected={propertyType === 'hotel'}
                                 onClick={() => setPropertyType('hotel')}
                             />
-                            <TypeCard
-                                type="flight"
-                                icon={Plane}
-                                title="Flight"
-                                description="Airline tickets"
-                                isSelected={propertyType === 'flight'}
-                                onClick={() => setPropertyType('flight')}
-                            />
-                            <TypeCard
-                                type="car"
-                                icon={Car}
-                                title="Car Rental"
-                                description="Vehicles for rent"
-                                isSelected={propertyType === 'car'}
-                                onClick={() => setPropertyType('car')}
-                            />
+                            {/* Flight - Admin only */}
+                            {isAdmin && (
+                                <TypeCard
+                                    type="flight"
+                                    icon={Plane}
+                                    title="Flight"
+                                    description="Airline tickets"
+                                    isSelected={propertyType === 'flight'}
+                                    onClick={() => setPropertyType('flight')}
+                                />
+                            )}
+                            {/* Car - Admin only */}
+                            {isAdmin && (
+                                <TypeCard
+                                    type="car"
+                                    icon={Car}
+                                    title="Car Rental"
+                                    description="Vehicles for rent"
+                                    isSelected={propertyType === 'car'}
+                                    onClick={() => setPropertyType('car')}
+                                />
+                            )}
                         </div>
+                        {isOwner && (
+                            <div className="mt-4 p-3 bg-blue-50 rounded-lg flex items-start gap-2">
+                                <Info size={16} className="text-blue-600 mt-0.5 flex-shrink-0" />
+                                <p className="text-sm text-blue-700">
+                                    As a property owner, you can list residential stays such as apartments, villas, houses, and guest houses.
+                                    Hotels, flights, and car rentals can only be added by administrators.
+                                </p>
+                            </div>
+                        )}
                     </div>
 
                     {/* Basic Info */}
@@ -373,37 +411,65 @@ export default function AddPropertyPage() {
                         </div>
                     </div>
 
-                    {/* Hotel-specific Fields */}
+                    {/* Hotel/Stay-specific Fields */}
                     {propertyType === 'hotel' && (
                         <div className="card p-6 mb-6">
-                            <h2 className="text-lg font-semibold mb-4">Hotel Details</h2>
+                            <h2 className="text-lg font-semibold mb-4">
+                                {isOwner ? 'Property Details' : 'Hotel Details'}
+                            </h2>
                             <div className="space-y-4">
                                 <div className="grid grid-cols-2 gap-4">
+                                    {/* Star Rating - Admin only */}
+                                    {isAdmin && (
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                Star Rating
+                                            </label>
+                                            <select
+                                                name="starRating"
+                                                value={formData.starRating}
+                                                onChange={handleInputChange}
+                                                className="input-field"
+                                            >
+                                                {[1, 2, 3, 4, 5].map(n => (
+                                                    <option key={n} value={n}>{n} Star</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    )}
+                                    {/* Property Category - Owner only */}
+                                    {isOwner && (
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                Property Category *
+                                            </label>
+                                            <select
+                                                name="roomType"
+                                                value={formData.roomType}
+                                                onChange={handleInputChange}
+                                                className="input-field"
+                                                required
+                                            >
+                                                <option value="">Select category</option>
+                                                <option value="Apartment">Apartment</option>
+                                                <option value="Villa">Villa</option>
+                                                <option value="House">House</option>
+                                                <option value="Chalet">Chalet</option>
+                                                <option value="Guest House">Guest House</option>
+                                                <option value="Cottage">Cottage</option>
+                                            </select>
+                                        </div>
+                                    )}
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-1">
-                                            Star Rating
-                                        </label>
-                                        <select
-                                            name="starRating"
-                                            value={formData.starRating}
-                                            onChange={handleInputChange}
-                                            className="input-field"
-                                        >
-                                            {[1, 2, 3, 4, 5].map(n => (
-                                                <option key={n} value={n}>{n} Star</option>
-                                            ))}
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                                            Room Type
+                                            {isOwner ? 'Unit Type' : 'Room Type'}
                                         </label>
                                         <input
                                             type="text"
-                                            name="roomType"
-                                            value={formData.roomType}
+                                            name={isOwner ? 'unitType' : 'roomType'}
+                                            value={isOwner ? (formData as any).unitType || '' : formData.roomType}
                                             onChange={handleInputChange}
-                                            placeholder="e.g., Deluxe Suite"
+                                            placeholder={isOwner ? 'e.g., 2 Bedroom Suite' : 'e.g., Deluxe Suite'}
                                             className="input-field"
                                         />
                                     </div>

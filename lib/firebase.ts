@@ -3,7 +3,7 @@
 // ==============================================
 
 import { initializeApp, getApps, FirebaseApp } from 'firebase/app';
-import { getAuth, Auth, GoogleAuthProvider } from 'firebase/auth';
+import { getAuth, Auth, GoogleAuthProvider, setPersistence, browserLocalPersistence } from 'firebase/auth';
 import { getFirestore, Firestore } from 'firebase/firestore';
 
 // Firebase configuration - Replace with your actual config
@@ -29,6 +29,18 @@ if (!getApps().length) {
     app = getApps()[0];
     auth = getAuth(app);
     db = getFirestore(app);
+}
+
+// Force browser to remember the user (explicit persistence)
+// This ensures auth state persists across page reloads and browser sessions
+if (typeof window !== 'undefined') {
+    setPersistence(auth, browserLocalPersistence)
+        .then(() => {
+            console.log('[Firebase] Auth persistence set to LOCAL');
+        })
+        .catch((error) => {
+            console.error('[Firebase] Failed to set auth persistence:', error);
+        });
 }
 
 // Google Auth Provider

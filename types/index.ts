@@ -5,17 +5,52 @@
 // -------------------- User Types --------------------
 
 export type UserRole = 'traveler' | 'owner' | 'admin';
+export type Gender = 'male' | 'female' | 'other';
+export type Currency = 'USD' | 'EUR' | 'EGP';
 
 export interface User {
+    // Core Identity
     id: string;
     email: string;
-    name: string;
     role: UserRole;
+
+    // Personal Info
+    username: string;           // Unique handle (e.g., @traveler_joe)
+    firstName: string;
+    lastName: string;
+    dateOfBirth?: string;       // YYYY-MM-DD (for age calculation)
+    gender?: Gender;            // Required for flights/passport match
     avatarUrl?: string;
-    phone?: string;
+
+    // Contact & Location
+    phoneNumber?: string;
+    address?: string;
+    country?: string;
+    city?: string;
+
+    // Preferences
+    currency: Currency;
+
+    // Account Status
     suspended?: boolean;
     createdAt: Date;
+
+    // Legacy compatibility
+    name?: string;              // Deprecated: use firstName + lastName
+    phone?: string;             // Deprecated: use phoneNumber
+
+    // Profile completion (for Google sign-in users)
+    isProfileComplete?: boolean;
 }
+
+// Helper to get display name
+export function getUserDisplayName(user: User): string {
+    if (user.firstName && user.lastName) {
+        return `${user.firstName} ${user.lastName}`;
+    }
+    return user.name || user.username || user.email.split('@')[0];
+}
+
 
 // -------------------- Property Types --------------------
 
@@ -113,7 +148,41 @@ export type BookingStatus =
     | 'AWAITING_PAYMENT'
     | 'CONFIRMED'
     | 'CANCELLED'
-    | 'COMPLETED';
+    | 'COMPLETED'
+    | 'PENDING_MODIFICATION';  // NEW: Waiting for owner to approve changes
+
+// Pending modification data structure
+export interface PendingModification {
+    // What fields are being modified
+    requestedAt: Date;
+    requestedBy: string;  // travelerId
+
+    // The proposed new values (only include what's changing)
+    checkInTime?: string;      // e.g., "14:00"
+    checkOutTime?: string;     // e.g., "11:00"
+    specialRequests?: string;
+    guests?: number;
+
+    // For flights
+    seatPreference?: string;
+    mealPreference?: string;
+
+    // For cars
+    pickupTime?: string;
+    dropoffTime?: string;
+
+    // Original values for comparison
+    previousValues: {
+        checkInTime?: string;
+        checkOutTime?: string;
+        specialRequests?: string;
+        guests?: number;
+        seatPreference?: string;
+        mealPreference?: string;
+        pickupTime?: string;
+        dropoffTime?: string;
+    };
+}
 
 export interface BookingDates {
     checkIn: Date;
@@ -138,6 +207,17 @@ export interface Booking {
     specialRequests?: string;
     createdAt: Date;
     updatedAt: Date;
+
+    // NEW: Modification workflow
+    pendingModification?: PendingModification;
+
+    // Additional fields for modification tracking
+    checkInTime?: string;    // e.g., "14:00"
+    checkOutTime?: string;   // e.g., "11:00"
+    seatPreference?: string; // For flights
+    mealPreference?: string; // For flights
+    pickupTime?: string;     // For cars
+    dropoffTime?: string;    // For cars
 }
 
 // -------------------- Search Types --------------------

@@ -202,17 +202,118 @@ function getHotelImages(count: number): string[] {
     return shuffled.slice(0, count);
 }
 
+// -------------------- Specific Flight Route Data --------------------
+
+interface FlightRoute {
+    origin: { name: string; code: string; lat: number; lng: number };
+    destination: { name: string; code: string; lat: number; lng: number };
+    airline: string;
+    basePrice: number;
+}
+
+// Define 12 specific popular routes
+const POPULAR_ROUTES: FlightRoute[] = [
+    // Cairo <-> Dubai (2 flights)
+    { origin: { name: 'Cairo', code: 'CAI', lat: 30.0444, lng: 31.2357 }, destination: { name: 'Dubai', code: 'DXB', lat: 25.2048, lng: 55.2708 }, airline: 'EgyptAir', basePrice: 350 },
+    { origin: { name: 'Dubai', code: 'DXB', lat: 25.2048, lng: 55.2708 }, destination: { name: 'Cairo', code: 'CAI', lat: 30.0444, lng: 31.2357 }, airline: 'Emirates', basePrice: 380 },
+    // Cairo <-> London (2 flights)
+    { origin: { name: 'Cairo', code: 'CAI', lat: 30.0444, lng: 31.2357 }, destination: { name: 'London', code: 'LHR', lat: 51.5074, lng: -0.1278 }, airline: 'EgyptAir', basePrice: 520 },
+    { origin: { name: 'London', code: 'LHR', lat: 51.5074, lng: -0.1278 }, destination: { name: 'Cairo', code: 'CAI', lat: 30.0444, lng: 31.2357 }, airline: 'British Airways', basePrice: 550 },
+    // New York <-> Paris (2 flights)
+    { origin: { name: 'New York', code: 'JFK', lat: 40.7128, lng: -74.006 }, destination: { name: 'Paris', code: 'CDG', lat: 48.8566, lng: 2.3522 }, airline: 'Air France', basePrice: 680 },
+    { origin: { name: 'Paris', code: 'CDG', lat: 48.8566, lng: 2.3522 }, destination: { name: 'New York', code: 'JFK', lat: 40.7128, lng: -74.006 }, airline: 'Delta', basePrice: 720 },
+    // Dubai <-> London (2 flights)
+    { origin: { name: 'Dubai', code: 'DXB', lat: 25.2048, lng: 55.2708 }, destination: { name: 'London', code: 'LHR', lat: 51.5074, lng: -0.1278 }, airline: 'Emirates', basePrice: 580 },
+    { origin: { name: 'London', code: 'LHR', lat: 51.5074, lng: -0.1278 }, destination: { name: 'Dubai', code: 'DXB', lat: 25.2048, lng: 55.2708 }, airline: 'British Airways', basePrice: 620 },
+    // Riyadh <-> Cairo (2 flights)
+    { origin: { name: 'Riyadh', code: 'RUH', lat: 24.7136, lng: 46.6753 }, destination: { name: 'Cairo', code: 'CAI', lat: 30.0444, lng: 31.2357 }, airline: 'Saudia', basePrice: 280 },
+    { origin: { name: 'Cairo', code: 'CAI', lat: 30.0444, lng: 31.2357 }, destination: { name: 'Riyadh', code: 'RUH', lat: 24.7136, lng: 46.6753 }, airline: 'EgyptAir', basePrice: 260 },
+    // Paris <-> Rome (2 flights)
+    { origin: { name: 'Paris', code: 'CDG', lat: 48.8566, lng: 2.3522 }, destination: { name: 'Rome', code: 'FCO', lat: 41.9028, lng: 12.4964 }, airline: 'Air France', basePrice: 180 },
+    { origin: { name: 'Rome', code: 'FCO', lat: 41.9028, lng: 12.4964 }, destination: { name: 'Paris', code: 'CDG', lat: 48.8566, lng: 2.3522 }, airline: 'Alitalia', basePrice: 195 },
+];
+
 // -------------------- Generate Flights Between Cities --------------------
 
 export function generateFlights(count: number = 80): Flight[] {
     const flights: Flight[] = [];
-    const usedRoutes = new Set<string>();
 
-    // Generate flights between different cities
-    for (let i = 0; i < count; i++) {
+    // First, generate the 12 specific popular routes
+    POPULAR_ROUTES.forEach((route, index) => {
         flightCounter++;
 
-        // Pick origin and destination
+        // Generate departure dates from tomorrow to next month
+        const daysFromNow = 1 + Math.floor(index * 2.5); // Spread flights over next month
+        const departureDate = new Date(Date.now() + daysFromNow * 24 * 60 * 60 * 1000);
+
+        const cabinClasses: ('economy' | 'business' | 'first')[] = ['economy', 'business', 'first'];
+        const cabinClass = cabinClasses[index % 3];
+
+        const cabinMultipliers: Record<string, number> = {
+            economy: 1,
+            business: 2.8,
+            first: 5.2
+        };
+
+        const price = Math.round(route.basePrice * cabinMultipliers[cabinClass] + getRandomNumber(-50, 100));
+
+        // Generate flight times
+        const departureHour = getRandomNumber(6, 22);
+        const departureMin = getRandomItem(['00', '15', '30', '45']);
+
+        // Calculate duration based on rough distance
+        const distance = Math.sqrt(
+            Math.pow((route.destination.lat - route.origin.lat) * 111, 2) +
+            Math.pow((route.destination.lng - route.origin.lng) * 85, 2)
+        );
+        const durationHours = Math.max(2, Math.round(distance / 800));
+        const durationMins = getRandomNumber(10, 50);
+
+        const arrivalHour = (departureHour + durationHours) % 24;
+        const nextDay = (departureHour + durationHours) >= 24;
+
+        const flight: Flight = {
+            id: `flight-${String(flightCounter).padStart(4, '0')}`,
+            ownerId: `owner-airline-${route.airline.toUpperCase().replace(/\s/g, '')}`,
+            type: 'flight',
+            title: `${route.origin.name} to ${route.destination.name} - ${route.airline}`,
+            description: `Fly ${cabinClass === 'economy' ? 'Economy' : cabinClass === 'business' ? 'Business Class' : 'First Class'} with ${route.airline}. Experience exceptional service and comfort on your ${route.origin.name} to ${route.destination.name} journey.`,
+            price,
+            currency: 'USD',
+            location: 'International',
+            images: getFlightImages(2),
+            rating: getRandomFloat(4.2, 5.0, 1),
+            reviewCount: getRandomNumber(500, 5000),
+            isAvailable: true,
+            status: 'APPROVED' as PropertyStatus,
+            createdAt: new Date(Date.now() - getRandomNumber(0, 90) * 24 * 60 * 60 * 1000),
+            airline: route.airline,
+            airlineLogo: `https://logo.clearbit.com/${route.airline.toLowerCase().replace(/\s/g, '')}.com`,
+            flightNumber: `${route.airline.substring(0, 2).toUpperCase()} ${getRandomNumber(100, 999)}`,
+            origin: route.origin.name,
+            originCode: route.origin.code,
+            destination: route.destination.name,
+            destinationCode: route.destination.code,
+            departureTime: `${String(departureHour).padStart(2, '0')}:${departureMin}`,
+            arrivalTime: `${String(arrivalHour).padStart(2, '0')}:${String(getRandomNumber(0, 59)).padStart(2, '0')}${nextDay ? '+1' : ''}`,
+            duration: `${durationHours}h ${durationMins}m`,
+            cabinClass,
+            stops: Math.random() > 0.8 ? 1 : 0,
+            aircraft: getRandomItem(AIRCRAFT_TYPES),
+            baggageAllowance: cabinClass === 'economy' ? '1 x 23kg' : cabinClass === 'business' ? '2 x 32kg' : '3 x 32kg',
+        };
+
+        flights.push(flight);
+    });
+
+    // Then generate additional random flights to reach the count
+    const usedRoutes = new Set<string>();
+    POPULAR_ROUTES.forEach(r => usedRoutes.add(`${r.origin.code}-${r.destination.code}`));
+
+    while (flights.length < count) {
+        flightCounter++;
+
+        // Pick origin and destination from CITIES
         let origin: CityData, destination: CityData;
         let routeKey: string;
         let attempts = 0;
@@ -230,7 +331,6 @@ export function generateFlights(count: number = 80): Flight[] {
         const cabinClass = getRandomItem(airline.cabinClasses);
         const stops = Math.random() > 0.75 ? getRandomNumber(1, 2) : 0;
 
-        // Calculate realistic price based on distance and cabin class
         const distance = calculateDistance(origin, destination);
         const basePricePerKm = 0.08;
         const cabinMultipliers: Record<string, number> = {
@@ -244,10 +344,9 @@ export function generateFlights(count: number = 80): Flight[] {
             getRandomNumber(100, 300)
         );
 
-        // Generate flight times
         const departureHour = getRandomNumber(0, 23);
         const departureMin = getRandomItem(['00', '15', '30', '45']);
-        const durationHours = Math.round(distance / 800); // ~800 km/h average
+        const durationHours = Math.round(distance / 800);
         const durationMins = getRandomNumber(0, 59);
 
         const arrivalHour = (departureHour + durationHours) % 24;

@@ -55,6 +55,38 @@ export interface BookingDocument {
     specialRequests?: string;
     createdAt: Timestamp;
     updatedAt: Timestamp;
+
+    // Modification workflow fields
+    pendingModification?: {
+        requestedAt: Timestamp;
+        requestedBy: string;
+        checkInTime?: string;
+        checkOutTime?: string;
+        specialRequests?: string;
+        guests?: number;
+        seatPreference?: string;
+        mealPreference?: string;
+        pickupTime?: string;
+        dropoffTime?: string;
+        previousValues: {
+            checkInTime?: string;
+            checkOutTime?: string;
+            specialRequests?: string;
+            guests?: number;
+            seatPreference?: string;
+            mealPreference?: string;
+            pickupTime?: string;
+            dropoffTime?: string;
+        };
+    };
+
+    // Additional booking detail fields
+    checkInTime?: string;
+    checkOutTime?: string;
+    seatPreference?: string;
+    mealPreference?: string;
+    pickupTime?: string;
+    dropoffTime?: string;
 }
 
 export async function createBooking(data: CreateBookingData): Promise<string> {
@@ -216,6 +248,12 @@ export function getStatusInfo(status: BookingStatus): {
                 color: 'text-gray-600',
                 bgColor: 'bg-gray-100'
             };
+        case 'PENDING_MODIFICATION':
+            return {
+                label: 'Modification Pending',
+                color: 'text-orange-600',
+                bgColor: 'bg-orange-100'
+            };
         default:
             return {
                 label: status,
@@ -223,4 +261,108 @@ export function getStatusInfo(status: BookingStatus): {
                 bgColor: 'bg-gray-100'
             };
     }
+}
+
+// -------------------- Modification Types --------------------
+
+export interface ModificationData {
+    checkInTime?: string;
+    checkOutTime?: string;
+    specialRequests?: string;
+    guests?: number;
+    seatPreference?: string;
+    mealPreference?: string;
+    pickupTime?: string;
+    dropoffTime?: string;
+}
+
+// -------------------- Check if Modification is Allowed --------------------
+
+export function canModifyBooking(booking: BookingDocument): { allowed: boolean; reason?: string } {
+    // Only CONFIRMED bookings can be modified
+    if (booking.status !== 'CONFIRMED') {
+        return { allowed: false, reason: 'Only confirmed bookings can be modified.' };
+    }
+
+    // Check if start date is at least 48 hours away
+    const now = new Date();
+    const startDate = booking.startDate.toDate();
+    const hoursUntilStart = (startDate.getTime() - now.getTime()) / (1000 * 60 * 60);
+
+    if (hoursUntilStart < 48) {
+        return { allowed: false, reason: 'Modifications must be made at least 48 hours before the booking start date.' };
+    }
+
+    return { allowed: true };
+}
+
+// -------------------- Request Modification (For Properties - Requires Approval) --------------------
+
+export async function requestModification(
+    bookingId: string,
+    travelerId: string,
+    modifications: ModificationData,
+    currentValues: ModificationData
+): Promise<void> {
+    const bookingRef = doc(db, 'bookings', bookingId);
+
+    await updateDoc(bookingRef, {
+        status: 'PENDING_MODIFICATION',
+        pendingModification: {
+            requestedAt: serverTimestamp(),
+            requestedBy: travelerId,
+            ...modifications,
+            previousValues: currentValues
+        },
+        updatedAt: serverTimestamp(),
+    });
+}
+
+// -------------------- Apply Modification Instantly (For Flights/Cars) --------------------
+
+export async function applyModificationInstantly(
+    bookingId: string,
+    modifications: ModificationData
+): Promise<void> {
+    const bookingRef = doc(db, 'bookings', bookingId);
+
+    // Apply changes directly to the booking
+    await updateDoc(bookingRef, {
+        ...modifications,
+        updatedAt: serverTimestamp(),
+    });
+}
+
+// -------------------- Approve Modification (Owner) --------------------
+
+export async function approveModification(bookingId: string, pendingModification: BookingDocument['pendingModification']): Promise<void> {
+    if (!pendingModification) {
+        throw new Error('No pending modification to approve');
+    }
+
+    const bookingRef = doc(db, 'bookings', bookingId);
+
+    // Extract the modification values (exclude metadata)
+    const { requestedAt, requestedBy, previousValues, ...modificationsToApply } = pendingModification;
+
+    // Apply the pending changes to the main booking fields
+    await updateDoc(bookingRef, {
+        ...modificationsToApply,
+        status: 'CONFIRMED',
+        pendingModification: null, // Clear the pending modification
+        updatedAt: serverTimestamp(),
+    });
+}
+
+// -------------------- Reject Modification (Owner) --------------------
+
+export async function rejectModification(bookingId: string): Promise<void> {
+    const bookingRef = doc(db, 'bookings', bookingId);
+
+    // Clear the pending modification and revert to CONFIRMED status
+    await updateDoc(bookingRef, {
+        status: 'CONFIRMED',
+        pendingModification: null,
+        updatedAt: serverTimestamp(),
+    });
 }

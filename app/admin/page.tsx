@@ -21,9 +21,13 @@ import {
     Check,
     X,
     Clock,
-    Eye
+    Eye,
+    TrendingUp,
+    BarChart3,
+    RefreshCw
 } from 'lucide-react';
 import { useAuthStore } from '@/hooks/useAuthStore';
+import { useAdminStats, TimeRange } from '@/hooks/useAdminStats';
 import {
     getAllUsers,
     toggleUserSuspension,
@@ -39,6 +43,22 @@ import {
 import { BookingDocument, formatBookingDate, getStatusInfo } from '@/lib/bookingService';
 import { User } from '@/types';
 import { toast } from '@/components/Toast';
+import SeedButton from '@/components/SeedButton';
+import {
+    BarChart,
+    Bar,
+    LineChart,
+    Line,
+    XAxis,
+    YAxis,
+    CartesianGrid,
+    Tooltip,
+    ResponsiveContainer,
+    PieChart,
+    Pie,
+    Cell,
+    Legend
+} from 'recharts';
 
 // -------------------- Stat Card --------------------
 
@@ -242,18 +262,29 @@ const PropertyApprovalCard = ({ property, onApprove, onReject, isLoading }: Prop
     );
 };
 
+// Chart colors
+const CHART_COLORS = ['#6366f1', '#f59e0b', '#22c55e', '#ef4444', '#8b5cf6'];
+const PIE_COLORS = ['#3b82f6', '#f97316', '#10b981'];
+
 // -------------------- Main Page --------------------
 
 export default function AdminDashboardPage() {
     const router = useRouter();
     const { user, isAuthenticated, isLoading: authLoading } = useAuthStore();
+
+    // Time range filter state
+    const [timeRange, setTimeRange] = useState<'1m' | '3m' | '6m' | '1y' | 'all'>('all');
+
+    // Use the new admin stats hook with time range
+    const { stats: adminStats, isLoading: statsLoading, formatCurrency, refetch: refetchStats } = useAdminStats(timeRange);
+
     const [users, setUsers] = useState<User[]>([]);
     const [pendingProperties, setPendingProperties] = useState<PropertyDocument[]>([]);
     const [bookings, setBookings] = useState<BookingDocument[]>([]);
     const [stats, setStats] = useState<PlatformStats | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [actionLoading, setActionLoading] = useState(false);
-    const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'properties' | 'bookings'>('overview');
+    const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'properties' | 'bookings' | 'reports'>('overview');
 
     // Auth check - redirect non-admins
     useEffect(() => {
@@ -265,26 +296,37 @@ export default function AdminDashboardPage() {
     // Fetch data
     useEffect(() => {
         const fetchData = async () => {
+            console.log('[AdminPage] Starting data fetch...');
             try {
+                // Fetch all data in parallel
                 const [usersData, statsData, propertiesData, bookingsData] = await Promise.all([
                     getAllUsers(),
                     getPlatformStats(),
                     getPendingProperties(),
                     getAllBookings()
                 ]);
+
+                console.log('[AdminPage] Data fetched successfully:');
+                console.log('  - Users:', usersData.length);
+                console.log('  - Pending Properties:', propertiesData.length);
+                console.log('  - Bookings:', bookingsData.length);
+
                 setUsers(usersData);
                 setStats(statsData);
                 setPendingProperties(propertiesData);
                 setBookings(bookingsData);
+
+                console.log('[AdminPage] State updated successfully');
             } catch (error) {
-                console.error('Error fetching admin data:', error);
-                toast.error('Failed to load admin data');
+                console.error('[AdminPage] Error fetching admin data:', error);
+                toast.error('Failed to load admin data', 'Check console for details');
             } finally {
                 setIsLoading(false);
             }
         };
 
         if (user?.role === 'admin') {
+            console.log('[AdminPage] User is admin, fetching data...');
             fetchData();
         }
     }, [user?.role]);
@@ -408,6 +450,16 @@ export default function AdminDashboardPage() {
                                 </span>
                             )}
                         </button>
+                        <button
+                            onClick={() => setActiveTab('reports')}
+                            className={`px-6 py-4 font-medium text-sm border-b-2 transition-colors flex items-center gap-2 ${activeTab === 'reports'
+                                ? 'border-purple-600 text-purple-600'
+                                : 'border-transparent text-gray-500 hover:text-gray-700'
+                                }`}
+                        >
+                            <BarChart3 size={16} />
+                            Reports
+                        </button>
                     </div>
                 </div>
             </div>
@@ -416,27 +468,27 @@ export default function AdminDashboardPage() {
                 {/* Overview Tab */}
                 {activeTab === 'overview' && (
                     <>
-                        {/* Stats Grid */}
+                        {/* Stats Grid - Now using adminStats for real data */}
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
                             <StatCard
                                 icon={DollarSign}
                                 label="Total Revenue"
-                                value={stats ? `$${stats.totalRevenue.toLocaleString()}` : '...'}
+                                value={adminStats ? formatCurrency(adminStats.totalRevenue) : '...'}
                                 subtext="From confirmed bookings"
                                 color="bg-success-500"
                             />
                             <StatCard
                                 icon={CreditCard}
                                 label="Total Bookings"
-                                value={stats?.totalBookings ?? '...'}
-                                subtext={`${stats?.confirmedBookings ?? 0} confirmed, ${stats?.pendingBookings ?? 0} pending`}
+                                value={adminStats?.totalBookings ?? '...'}
+                                subtext={`${adminStats?.confirmedBookings ?? 0} confirmed, ${adminStats?.pendingBookings ?? 0} pending`}
                                 color="bg-primary-500"
                             />
                             <StatCard
                                 icon={Users}
                                 label="Total Users"
-                                value={stats?.totalUsers ?? '...'}
-                                subtext={`${stats?.travelers ?? 0} travelers, ${stats?.owners ?? 0} owners`}
+                                value={adminStats?.totalUsers ?? '...'}
+                                subtext={`${adminStats?.travelers ?? 0} travelers, ${adminStats?.owners ?? 0} owners`}
                                 color="bg-accent-500"
                             />
                             <StatCard
@@ -476,6 +528,14 @@ export default function AdminDashboardPage() {
                                     <p className="text-2xl font-bold">6</p>
                                     <p className="text-sm text-gray-500">Cars Listed</p>
                                 </div>
+                            </div>
+                        </div>
+
+                        {/* Database Seed Tool */}
+                        <div className="mb-8">
+                            <h3 className="text-lg font-semibold mb-4">Developer Tools</h3>
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                <SeedButton />
                             </div>
                         </div>
 
@@ -690,7 +750,254 @@ export default function AdminDashboardPage() {
                         )}
                     </div>
                 )}
+
+                {/* Reports Tab */}
+                {activeTab === 'reports' && (
+                    <div className="space-y-8">
+                        {/* Header */}
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                            <div>
+                                <h2 className="text-2xl font-bold text-gray-900">Analytics Reports</h2>
+                                <p className="text-gray-500">Real-time data from Firestore</p>
+                            </div>
+                            <div className="flex items-center gap-3">
+                                {/* Time Range Dropdown */}
+                                <select
+                                    value={timeRange}
+                                    onChange={(e) => setTimeRange(e.target.value as TimeRange)}
+                                    className="px-4 py-2 border border-gray-300 rounded-lg bg-white text-gray-700 font-medium focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                >
+                                    <option value="1m">Last 30 Days</option>
+                                    <option value="3m">Last 3 Months</option>
+                                    <option value="6m">Last 6 Months</option>
+                                    <option value="1y">Last Year</option>
+                                    <option value="all">All Time</option>
+                                </select>
+                                <button
+                                    onClick={refetchStats}
+                                    disabled={statsLoading}
+                                    className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50"
+                                >
+                                    <RefreshCw size={16} className={statsLoading ? 'animate-spin' : ''} />
+                                    Refresh
+                                </button>
+                            </div>
+                        </div>
+
+                        {statsLoading ? (
+                            <div className="flex items-center justify-center py-20">
+                                <Loader2 size={40} className="animate-spin text-purple-600" />
+                            </div>
+                        ) : adminStats ? (
+                            <>
+                                {/* Summary Cards */}
+                                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                                    <div className="card p-5">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-10 h-10 bg-success-100 rounded-lg flex items-center justify-center">
+                                                <DollarSign size={20} className="text-success-600" />
+                                            </div>
+                                            <div>
+                                                <p className="text-sm text-gray-500">Total Revenue</p>
+                                                <p className="text-xl font-bold text-gray-900">{formatCurrency(adminStats.totalRevenue)}</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="card p-5">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-10 h-10 bg-primary-100 rounded-lg flex items-center justify-center">
+                                                <CreditCard size={20} className="text-primary-600" />
+                                            </div>
+                                            <div>
+                                                <p className="text-sm text-gray-500">Confirmed Bookings</p>
+                                                <p className="text-xl font-bold text-gray-900">{adminStats.confirmedBookings}</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="card p-5">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-10 h-10 bg-accent-100 rounded-lg flex items-center justify-center">
+                                                <Users size={20} className="text-accent-600" />
+                                            </div>
+                                            <div>
+                                                <p className="text-sm text-gray-500">Total Users</p>
+                                                <p className="text-xl font-bold text-gray-900">{adminStats.totalUsers}</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="card p-5">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+                                                <Building2 size={20} className="text-purple-600" />
+                                            </div>
+                                            <div>
+                                                <p className="text-sm text-gray-500">Active Properties</p>
+                                                <p className="text-xl font-bold text-gray-900">{adminStats.activeProperties}</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Charts Row */}
+                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                    {/* Revenue by Month */}
+                                    <div className="card p-6">
+                                        <div className="flex items-center gap-2 mb-6">
+                                            <TrendingUp size={20} className="text-success-600" />
+                                            <h3 className="text-lg font-semibold">Revenue by Month</h3>
+                                        </div>
+                                        <div className="h-72">
+                                            <ResponsiveContainer width="100%" height="100%">
+                                                <BarChart data={adminStats.revenueByMonth}>
+                                                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                                                    <XAxis dataKey="month" tick={{ fontSize: 12 }} />
+                                                    <YAxis tick={{ fontSize: 12 }} tickFormatter={(v) => `$${v / 1000}k`} />
+                                                    <Tooltip
+                                                        formatter={(value) => [`$${(value as number).toLocaleString()}`, 'Revenue']}
+                                                        contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb' }}
+                                                    />
+                                                    <Bar dataKey="value" fill="#22c55e" radius={[4, 4, 0, 0]} />
+                                                </BarChart>
+                                            </ResponsiveContainer>
+                                        </div>
+                                    </div>
+
+                                    {/* User Growth */}
+                                    <div className="card p-6">
+                                        <div className="flex items-center gap-2 mb-6">
+                                            <Users size={20} className="text-primary-600" />
+                                            <h3 className="text-lg font-semibold">User Growth</h3>
+                                        </div>
+                                        <div className="h-72">
+                                            <ResponsiveContainer width="100%" height="100%">
+                                                <LineChart data={adminStats.userGrowth}>
+                                                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                                                    <XAxis dataKey="month" tick={{ fontSize: 12 }} />
+                                                    <YAxis tick={{ fontSize: 12 }} />
+                                                    <Tooltip
+                                                        formatter={(value) => [value, 'New Users']}
+                                                        contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb' }}
+                                                    />
+                                                    <Line
+                                                        type="monotone"
+                                                        dataKey="value"
+                                                        stroke="#6366f1"
+                                                        strokeWidth={3}
+                                                        dot={{ fill: '#6366f1', strokeWidth: 2, r: 4 }}
+                                                    />
+                                                </LineChart>
+                                            </ResponsiveContainer>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Bottom Row */}
+                                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                                    {/* Bookings by Type */}
+                                    <div className="card p-6">
+                                        <div className="flex items-center gap-2 mb-6">
+                                            <BarChart3 size={20} className="text-purple-600" />
+                                            <h3 className="text-lg font-semibold">Bookings by Type</h3>
+                                        </div>
+                                        <div className="h-64">
+                                            <ResponsiveContainer width="100%" height="100%">
+                                                <PieChart>
+                                                    <Pie
+                                                        data={adminStats.bookingsByType}
+                                                        cx="50%"
+                                                        cy="50%"
+                                                        innerRadius={50}
+                                                        outerRadius={80}
+                                                        paddingAngle={5}
+                                                        dataKey="value"
+                                                        label={({ name, percent }) => `${name} ${((percent || 0) * 100).toFixed(0)}%`}
+                                                    >
+                                                        {adminStats.bookingsByType.map((entry, index) => (
+                                                            <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                                                        ))}
+                                                    </Pie>
+                                                    <Tooltip />
+                                                </PieChart>
+                                            </ResponsiveContainer>
+                                        </div>
+                                    </div>
+
+                                    {/* User Breakdown */}
+                                    <div className="card p-6">
+                                        <h3 className="text-lg font-semibold mb-4">User Breakdown</h3>
+                                        <div className="space-y-4">
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-2">
+                                                    <div className="w-3 h-3 bg-primary-500 rounded-full"></div>
+                                                    <span className="text-gray-600">Travelers</span>
+                                                </div>
+                                                <span className="font-bold">{adminStats.travelers}</span>
+                                            </div>
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-2">
+                                                    <div className="w-3 h-3 bg-accent-500 rounded-full"></div>
+                                                    <span className="text-gray-600">Property Owners</span>
+                                                </div>
+                                                <span className="font-bold">{adminStats.owners}</span>
+                                            </div>
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-2">
+                                                    <div className="w-3 h-3 bg-purple-500 rounded-full"></div>
+                                                    <span className="text-gray-600">Admins</span>
+                                                </div>
+                                                <span className="font-bold">{adminStats.admins}</span>
+                                            </div>
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-2">
+                                                    <div className="w-3 h-3 bg-error-500 rounded-full"></div>
+                                                    <span className="text-gray-600">Suspended</span>
+                                                </div>
+                                                <span className="font-bold">{adminStats.suspendedUsers}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Booking Status */}
+                                    <div className="card p-6">
+                                        <h3 className="text-lg font-semibold mb-4">Booking Status</h3>
+                                        <div className="space-y-4">
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-2">
+                                                    <div className="w-3 h-3 bg-success-500 rounded-full"></div>
+                                                    <span className="text-gray-600">Confirmed</span>
+                                                </div>
+                                                <span className="font-bold">{adminStats.confirmedBookings}</span>
+                                            </div>
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-2">
+                                                    <div className="w-3 h-3 bg-warning-500 rounded-full"></div>
+                                                    <span className="text-gray-600">Pending</span>
+                                                </div>
+                                                <span className="font-bold">{adminStats.pendingBookings}</span>
+                                            </div>
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-2">
+                                                    <div className="w-3 h-3 bg-error-500 rounded-full"></div>
+                                                    <span className="text-gray-600">Cancelled</span>
+                                                </div>
+                                                <span className="font-bold">{adminStats.cancelledBookings}</span>
+                                            </div>
+                                            <div className="flex items-center justify-between pt-3 border-t">
+                                                <span className="text-gray-900 font-medium">Total</span>
+                                                <span className="font-bold text-lg">{adminStats.totalBookings}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </>
+                        ) : (
+                            <div className="card p-12 text-center">
+                                <p className="text-gray-500">No data available</p>
+                            </div>
+                        )}
+                    </div>
+                )}
             </div>
-        </div>
+        </div >
     );
 }

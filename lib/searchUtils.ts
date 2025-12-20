@@ -34,33 +34,37 @@ export function filterHotels(filters: SearchFilters): Hotel[] {
     // SECURITY: Only show APPROVED properties to users
     let results = mockHotels.filter(h => h.status === 'APPROVED');
 
+    // Location filter - case-insensitive with trimming
     if (filters.location) {
-        const query = filters.location.toLowerCase();
-        results = results.filter(h =>
-            h.location.toLowerCase().includes(query) ||
-            h.city.toLowerCase().includes(query) ||
-            h.country.toLowerCase().includes(query) ||
-            h.title.toLowerCase().includes(query)
-        );
+        const query = filters.location.toLowerCase().trim();
+        if (query.length > 0) {
+            results = results.filter(h =>
+                h.location.toLowerCase().trim().includes(query) ||
+                h.city.toLowerCase().trim().includes(query) ||
+                h.country.toLowerCase().trim().includes(query) ||
+                h.title.toLowerCase().trim().includes(query)
+            );
+        }
     }
 
-    if (filters.minPrice !== undefined) {
+    // Price filters - ensure number comparison
+    if (filters.minPrice !== undefined && filters.minPrice > 0) {
         results = results.filter(h => h.price >= filters.minPrice!);
     }
 
-    if (filters.maxPrice !== undefined) {
+    if (filters.maxPrice !== undefined && filters.maxPrice > 0) {
         results = results.filter(h => h.price <= filters.maxPrice!);
     }
 
-    if (filters.minRating !== undefined) {
+    if (filters.minRating !== undefined && filters.minRating > 0) {
         results = results.filter(h => h.rating >= filters.minRating!);
     }
 
-    if (filters.starRating !== undefined) {
+    if (filters.starRating !== undefined && filters.starRating > 0) {
         results = results.filter(h => h.starRating >= filters.starRating!);
     }
 
-    if (filters.guests !== undefined) {
+    if (filters.guests !== undefined && filters.guests > 0) {
         results = results.filter(h => h.maxGuests >= filters.guests!);
     }
 
@@ -70,38 +74,71 @@ export function filterHotels(filters: SearchFilters): Hotel[] {
 // -------------------- Filter Flights --------------------
 
 export function filterFlights(filters: SearchFilters): Flight[] {
+    console.log('[Flight Search] Total mockFlights:', mockFlights.length);
+    console.log('[Flight Search] Filters:', filters);
+
     // SECURITY: Only show APPROVED properties to users
     let results = mockFlights.filter(f => f.status === 'APPROVED');
+    console.log('[Flight Search] After APPROVED filter:', results.length);
 
+    // Debug: Show first few flights
+    if (mockFlights.length > 0) {
+        console.log('[Flight Search] Sample flights:', mockFlights.slice(0, 3).map(f => ({
+            origin: f.origin,
+            originCode: f.originCode,
+            destination: f.destination,
+            destinationCode: f.destinationCode,
+            status: f.status
+        })));
+    }
+
+    // Origin filter - case-insensitive with trimming
     if (filters.origin) {
-        const query = filters.origin.toLowerCase();
-        results = results.filter(f =>
-            f.origin.toLowerCase().includes(query) ||
-            f.originCode.toLowerCase().includes(query)
-        );
+        const query = filters.origin.toLowerCase().trim();
+        console.log('[Flight Search] Origin filter query:', query);
+        if (query.length > 0) {
+            const beforeCount = results.length;
+            results = results.filter(f =>
+                f.origin.toLowerCase().trim().includes(query) ||
+                f.originCode.toLowerCase().trim().includes(query)
+            );
+            console.log(`[Flight Search] After origin filter: ${results.length} (was ${beforeCount})`);
+        }
     }
 
+    // Destination filter - case-insensitive with trimming
     if (filters.destination) {
-        const query = filters.destination.toLowerCase();
-        results = results.filter(f =>
-            f.destination.toLowerCase().includes(query) ||
-            f.destinationCode.toLowerCase().includes(query)
-        );
+        const query = filters.destination.toLowerCase().trim();
+        console.log('[Flight Search] Destination filter query:', query);
+        if (query.length > 0) {
+            const beforeCount = results.length;
+            results = results.filter(f =>
+                f.destination.toLowerCase().trim().includes(query) ||
+                f.destinationCode.toLowerCase().trim().includes(query)
+            );
+            console.log(`[Flight Search] After destination filter: ${results.length} (was ${beforeCount})`);
+        }
     }
 
+    console.log('[Flight Search] Final results count:', results.length);
+
+    // Cabin class - case-insensitive comparison
     if (filters.cabinClass) {
-        results = results.filter(f => f.cabinClass === filters.cabinClass);
+        const query = filters.cabinClass.toLowerCase().trim();
+        if (query.length > 0) {
+            results = results.filter(f => f.cabinClass.toLowerCase() === query);
+        }
     }
 
-    if (filters.maxStops !== undefined) {
+    if (filters.maxStops !== undefined && filters.maxStops >= 0) {
         results = results.filter(f => f.stops <= filters.maxStops!);
     }
 
-    if (filters.minPrice !== undefined) {
+    if (filters.minPrice !== undefined && filters.minPrice > 0) {
         results = results.filter(f => f.price >= filters.minPrice!);
     }
 
-    if (filters.maxPrice !== undefined) {
+    if (filters.maxPrice !== undefined && filters.maxPrice > 0) {
         results = results.filter(f => f.price <= filters.maxPrice!);
     }
 
@@ -114,31 +151,46 @@ export function filterCars(filters: SearchFilters): Car[] {
     // SECURITY: Only show APPROVED properties to users
     let results = mockCars.filter(c => c.status === 'APPROVED');
 
+    // Pickup location filter - case-insensitive with trimming
     if (filters.pickupLocation) {
-        const query = filters.pickupLocation.toLowerCase();
-        results = results.filter(c =>
-            c.pickupLocation.toLowerCase().includes(query) ||
-            c.location.toLowerCase().includes(query)
-        );
+        const query = filters.pickupLocation.toLowerCase().trim();
+        if (query.length > 0) {
+            results = results.filter(c =>
+                c.pickupLocation.toLowerCase().trim().includes(query) ||
+                c.location.toLowerCase().trim().includes(query)
+            );
+        }
     }
 
+    // Category - case-insensitive comparison
     if (filters.category) {
-        results = results.filter(c => c.category === filters.category);
+        const query = filters.category.toLowerCase().trim();
+        if (query.length > 0) {
+            results = results.filter(c => c.category.toLowerCase() === query);
+        }
     }
 
+    // Transmission - case-insensitive comparison
     if (filters.transmission) {
-        results = results.filter(c => c.transmission === filters.transmission);
+        const query = filters.transmission.toLowerCase().trim();
+        if (query.length > 0) {
+            results = results.filter(c => c.transmission.toLowerCase() === query);
+        }
     }
 
+    // Fuel type - case-insensitive comparison
     if (filters.fuelType) {
-        results = results.filter(c => c.fuelType === filters.fuelType);
+        const query = filters.fuelType.toLowerCase().trim();
+        if (query.length > 0) {
+            results = results.filter(c => c.fuelType.toLowerCase() === query);
+        }
     }
 
-    if (filters.minPrice !== undefined) {
+    if (filters.minPrice !== undefined && filters.minPrice > 0) {
         results = results.filter(c => c.price >= filters.minPrice!);
     }
 
-    if (filters.maxPrice !== undefined) {
+    if (filters.maxPrice !== undefined && filters.maxPrice > 0) {
         results = results.filter(c => c.price <= filters.maxPrice!);
     }
 
@@ -162,28 +214,55 @@ export function filterResults(filters: SearchFilters): Property[] {
 
 // -------------------- Parse URL Search Params --------------------
 
+// Helper to safely get and trim search param
+function getParam(searchParams: URLSearchParams, key: string): string | undefined {
+    const value = searchParams.get(key);
+    if (!value) return undefined;
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+}
+
+// Helper to safely parse integer
+function getIntParam(searchParams: URLSearchParams, key: string): number | undefined {
+    const value = getParam(searchParams, key);
+    if (!value) return undefined;
+    const parsed = parseInt(value, 10);
+    return isNaN(parsed) ? undefined : parsed;
+}
+
+// Helper to safely parse float
+function getFloatParam(searchParams: URLSearchParams, key: string): number | undefined {
+    const value = getParam(searchParams, key);
+    if (!value) return undefined;
+    const parsed = parseFloat(value);
+    return isNaN(parsed) ? undefined : parsed;
+}
+
 export function parseSearchParams(searchParams: URLSearchParams): SearchFilters {
-    const tab = (searchParams.get('tab') || 'stays') as SearchTab;
+    const tabParam = getParam(searchParams, 'tab');
+    const tab = (tabParam === 'stays' || tabParam === 'flights' || tabParam === 'cars'
+        ? tabParam
+        : 'stays') as SearchTab;
 
     return {
         tab,
-        // Stays
-        location: searchParams.get('location') || undefined,
-        minPrice: searchParams.get('minPrice') ? parseInt(searchParams.get('minPrice')!) : undefined,
-        maxPrice: searchParams.get('maxPrice') ? parseInt(searchParams.get('maxPrice')!) : undefined,
-        minRating: searchParams.get('minRating') ? parseFloat(searchParams.get('minRating')!) : undefined,
-        starRating: searchParams.get('starRating') ? parseInt(searchParams.get('starRating')!) : undefined,
-        guests: searchParams.get('guests') ? parseInt(searchParams.get('guests')!) : undefined,
+        // Stays - normalize location for matching
+        location: getParam(searchParams, 'location'),
+        minPrice: getIntParam(searchParams, 'minPrice'),
+        maxPrice: getIntParam(searchParams, 'maxPrice'),
+        minRating: getFloatParam(searchParams, 'minRating'),
+        starRating: getIntParam(searchParams, 'starRating'),
+        guests: getIntParam(searchParams, 'guests'),
         // Flights
-        origin: searchParams.get('origin') || undefined,
-        destination: searchParams.get('destination') || undefined,
-        cabinClass: searchParams.get('cabin') || undefined,
-        maxStops: searchParams.get('maxStops') ? parseInt(searchParams.get('maxStops')!) : undefined,
+        origin: getParam(searchParams, 'origin'),
+        destination: getParam(searchParams, 'destination'),
+        cabinClass: getParam(searchParams, 'cabin'),
+        maxStops: getIntParam(searchParams, 'maxStops'),
         // Cars
-        pickupLocation: searchParams.get('pickup') || undefined,
-        category: searchParams.get('category') || undefined,
-        transmission: searchParams.get('transmission') || undefined,
-        fuelType: searchParams.get('fuelType') || undefined,
+        pickupLocation: getParam(searchParams, 'pickup'),
+        category: getParam(searchParams, 'category'),
+        transmission: getParam(searchParams, 'transmission'),
+        fuelType: getParam(searchParams, 'fuelType'),
     };
 }
 

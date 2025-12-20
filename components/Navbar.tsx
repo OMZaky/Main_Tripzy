@@ -4,7 +4,7 @@
 // TRIPZY - Dynamic Navbar
 // ==============================================
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -19,29 +19,28 @@ import {
     UserPlus
 } from 'lucide-react';
 import { useAuthStore } from '@/hooks/useAuthStore';
+import SignInModal from '@/components/auth/SignInModal';
 import SignUpModal from '@/components/auth/SignUpModal';
+import CompleteProfileModal from '@/components/auth/CompleteProfileModal';
 import { UserRole } from '@/types';
 
 export default function Navbar() {
     const router = useRouter();
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+    const [isSignInModalOpen, setIsSignInModalOpen] = useState(false);
     const [isSignUpModalOpen, setIsSignUpModalOpen] = useState(false);
+    const [isCompleteProfileOpen, setIsCompleteProfileOpen] = useState(false);
 
-    const { user, isAuthenticated, isLoading, signInWithGoogle, signOut, error, clearError } = useAuthStore();
+    const { user, isAuthenticated, isLoading, signOut, error, clearError } = useAuthStore();
 
-    const handleLogin = async () => {
-        const result = await signInWithGoogle();
-        if (result.success) {
-            if (result.role === 'admin') {
-                router.push('/admin');
-            } else if (result.role === 'owner') {
-                router.push('/dashboard');
-            } else {
-                router.push('/');
-            }
+    // Check if user needs to complete their profile
+    useEffect(() => {
+        if (isAuthenticated && user && user.isProfileComplete === false) {
+            // User has incomplete profile - show modal
+            setIsCompleteProfileOpen(true);
         }
-    };
+    }, [isAuthenticated, user]);
 
     const handleLogout = async () => {
         await signOut();
@@ -141,10 +140,10 @@ export default function Navbar() {
                                                 <p className="font-medium text-gray-900">{user.name}</p>
                                                 <p className="text-sm text-gray-500">{user.email}</p>
                                                 <span className={`inline-block mt-1 text-xs px-2 py-0.5 rounded-full ${isAdmin
-                                                        ? 'bg-purple-100 text-purple-700'
-                                                        : isOwner
-                                                            ? 'bg-accent-100 text-accent-700'
-                                                            : 'bg-primary-100 text-primary-700'
+                                                    ? 'bg-purple-100 text-purple-700'
+                                                    : isOwner
+                                                        ? 'bg-accent-100 text-accent-700'
+                                                        : 'bg-primary-100 text-primary-700'
                                                     }`}>
                                                     {isAdmin ? 'Admin' : isOwner ? 'Property Owner' : 'Traveler'}
                                                 </span>
@@ -194,7 +193,7 @@ export default function Navbar() {
                                 <>
                                     {/* Sign In Button */}
                                     <button
-                                        onClick={handleLogin}
+                                        onClick={() => setIsSignInModalOpen(true)}
                                         className="px-4 py-2 text-gray-700 font-medium hover:text-primary-600 transition-colors"
                                     >
                                         Sign In
@@ -315,7 +314,7 @@ export default function Navbar() {
                                         <div className="space-y-2 px-4">
                                             <button
                                                 onClick={() => {
-                                                    handleLogin();
+                                                    setIsSignInModalOpen(true);
                                                     setIsMobileMenuOpen(false);
                                                 }}
                                                 className="w-full py-3 border border-gray-200 rounded-xl font-medium hover:bg-gray-50"
@@ -340,12 +339,27 @@ export default function Navbar() {
                     )}
                 </div>
             </nav>
+            {/* Sign In Modal */}
+            <SignInModal
+                isOpen={isSignInModalOpen}
+                onClose={() => setIsSignInModalOpen(false)}
+                onSwitchToSignUp={() => {
+                    setIsSignInModalOpen(false);
+                    setIsSignUpModalOpen(true);
+                }}
+            />
 
             {/* Sign Up Modal */}
             <SignUpModal
                 isOpen={isSignUpModalOpen}
                 onClose={() => setIsSignUpModalOpen(false)}
                 onSuccess={handleSignUpSuccess}
+            />
+
+            {/* Complete Profile Modal (for Google users with incomplete profiles) */}
+            <CompleteProfileModal
+                isOpen={isCompleteProfileOpen}
+                onComplete={() => setIsCompleteProfileOpen(false)}
             />
         </>
     );

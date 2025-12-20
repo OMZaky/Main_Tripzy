@@ -21,7 +21,9 @@ import {
     Plus,
     Plane,
     Car,
-    Eye
+    Eye,
+    Edit3,
+    ArrowRight
 } from 'lucide-react';
 import { useAuthStore } from '@/hooks/useAuthStore';
 import {
@@ -30,7 +32,9 @@ import {
     rejectBooking,
     formatBookingDate,
     getStatusInfo,
-    BookingDocument
+    BookingDocument,
+    approveModification,
+    rejectModification
 } from '@/lib/bookingService';
 import {
     getOwnerProperties,
@@ -115,6 +119,7 @@ const BookingRow = ({ booking, onApprove, onReject, isLoading }: BookingRowProps
                     {booking.status === 'PENDING_APPROVAL' && <Clock size={12} />}
                     {booking.status === 'AWAITING_PAYMENT' && <CreditCard size={12} />}
                     {booking.status === 'CONFIRMED' && <Check size={12} />}
+                    {booking.status === 'PENDING_MODIFICATION' && <Edit3 size={12} />}
                     {statusInfo.label}
                 </span>
             </td>
@@ -138,6 +143,11 @@ const BookingRow = ({ booking, onApprove, onReject, isLoading }: BookingRowProps
                             Reject
                         </button>
                     </div>
+                ) : booking.status === 'PENDING_MODIFICATION' ? (
+                    <span className="text-sm text-orange-600 font-medium flex items-center gap-1">
+                        <Edit3 size={14} />
+                        Review Changes Below
+                    </span>
                 ) : booking.status === 'AWAITING_PAYMENT' ? (
                     <span className="text-sm text-primary-600 font-medium">Waiting for Payment</span>
                 ) : booking.status === 'CONFIRMED' ? (
@@ -147,6 +157,111 @@ const BookingRow = ({ booking, onApprove, onReject, isLoading }: BookingRowProps
                 )}
             </td>
         </tr>
+    );
+};
+
+// -------------------- Modification Review Card --------------------
+
+interface ModificationReviewCardProps {
+    booking: BookingDocument;
+    onApprove: () => void;
+    onReject: () => void;
+    isLoading: boolean;
+}
+
+const ModificationReviewCard = ({ booking, onApprove, onReject, isLoading }: ModificationReviewCardProps) => {
+    const mod = booking.pendingModification;
+    if (!mod) return null;
+
+    // Helper to render a comparison row
+    const ComparisonRow = ({ label, oldValue, newValue }: { label: string; oldValue?: string | number; newValue?: string | number }) => {
+        if (newValue === undefined || newValue === null) return null;
+        return (
+            <div className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0">
+                <span className="text-sm text-gray-600">{label}</span>
+                <div className="flex items-center gap-3">
+                    <span className="text-sm text-gray-400 line-through">{oldValue || '—'}</span>
+                    <ArrowRight size={14} className="text-gray-400" />
+                    <span className="text-sm font-medium text-gray-900">{newValue}</span>
+                </div>
+            </div>
+        );
+    };
+
+    return (
+        <div className="card overflow-hidden border-2 border-orange-200">
+            <div className="bg-orange-50 px-5 py-3 border-b border-orange-200">
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                        <Edit3 size={18} className="text-orange-600" />
+                        <h4 className="font-semibold text-orange-800">Modification Request</h4>
+                    </div>
+                    <span className="text-xs text-orange-600">Review Required</span>
+                </div>
+            </div>
+
+            <div className="p-5">
+                {/* Booking Info */}
+                <div className="flex items-center gap-3 mb-4 pb-4 border-b">
+                    <img
+                        src={booking.propertyImage}
+                        alt={booking.propertyTitle}
+                        className="w-14 h-14 rounded-lg object-cover"
+                    />
+                    <div>
+                        <h4 className="font-medium text-gray-900">{booking.propertyTitle}</h4>
+                        <p className="text-sm text-gray-500">{booking.travelerName} • {booking.travelerEmail}</p>
+                    </div>
+                </div>
+
+                {/* Changes Comparison */}
+                <div className="mb-4">
+                    <h5 className="text-sm font-semibold text-gray-700 mb-2">Requested Changes:</h5>
+                    <div className="bg-gray-50 rounded-lg p-3">
+                        <ComparisonRow
+                            label="Check-in Time"
+                            oldValue={mod.previousValues?.checkInTime}
+                            newValue={mod.checkInTime}
+                        />
+                        <ComparisonRow
+                            label="Check-out Time"
+                            oldValue={mod.previousValues?.checkOutTime}
+                            newValue={mod.checkOutTime}
+                        />
+                        <ComparisonRow
+                            label="Guests"
+                            oldValue={mod.previousValues?.guests}
+                            newValue={mod.guests}
+                        />
+                        <ComparisonRow
+                            label="Special Requests"
+                            oldValue={mod.previousValues?.specialRequests}
+                            newValue={mod.specialRequests}
+                        />
+                    </div>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex items-center gap-3">
+                    <button
+                        onClick={onApprove}
+                        disabled={isLoading}
+                        className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-success-600 text-white rounded-lg hover:bg-success-700 transition-colors font-medium disabled:opacity-50"
+                    >
+                        <Check size={18} />
+                        Approve Changes
+                    </button>
+                    <button
+                        onClick={onReject}
+                        disabled={isLoading}
+                        className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-error-600 text-white rounded-lg hover:bg-error-700 transition-colors font-medium disabled:opacity-50"
+                    >
+                        <X size={18} />
+                        Reject Changes
+                    </button>
+                </div>
+            </div>
+        </div>
     );
 };
 
@@ -272,9 +387,55 @@ export default function DashboardPage() {
         }
     };
 
+    // Handle modification approval
+    const handleApproveModification = async (booking: BookingDocument) => {
+        setActionLoading(true);
+        try {
+            await approveModification(booking.id, booking.pendingModification);
+            // Update local state - apply modifications and clear pendingModification
+            setBookings(prev => prev.map(b => {
+                if (b.id !== booking.id) return b;
+                const mod = b.pendingModification;
+                return {
+                    ...b,
+                    status: 'CONFIRMED' as const,
+                    checkInTime: mod?.checkInTime ?? b.checkInTime,
+                    checkOutTime: mod?.checkOutTime ?? b.checkOutTime,
+                    specialRequests: mod?.specialRequests ?? b.specialRequests,
+                    guests: mod?.guests ?? b.guests,
+                    pendingModification: undefined
+                };
+            }));
+            toast.success('Changes Approved', 'The booking has been updated with the new details.');
+        } catch (error) {
+            toast.error('Failed to approve changes');
+        } finally {
+            setActionLoading(false);
+        }
+    };
+
+    // Handle modification rejection
+    const handleRejectModification = async (bookingId: string) => {
+        setActionLoading(true);
+        try {
+            await rejectModification(bookingId);
+            // Update local state - clear pending modification and revert to confirmed
+            setBookings(prev => prev.map(b =>
+                b.id === bookingId ? { ...b, status: 'CONFIRMED' as const, pendingModification: undefined } : b
+            ));
+            toast.success('Changes Rejected', 'The booking will keep its original details.');
+        } catch (error) {
+            toast.error('Failed to reject changes');
+        } finally {
+            setActionLoading(false);
+        }
+    };
+
     // Stats
+    const pendingModifications = bookings.filter(b => b.status === 'PENDING_MODIFICATION');
     const stats = {
         pending: bookings.filter(b => b.status === 'PENDING_APPROVAL').length,
+        pendingMods: pendingModifications.length,
         confirmed: bookings.filter(b => b.status === 'CONFIRMED').length,
         totalRevenue: bookings.filter(b => b.status === 'CONFIRMED').reduce((sum, b) => sum + b.totalPrice, 0),
         totalListings: properties.length,
@@ -315,12 +476,18 @@ export default function DashboardPage() {
 
             <div className="container mx-auto px-4 py-8">
                 {/* Stats Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
                     <StatCard
                         icon={Clock}
                         label="Pending Requests"
                         value={stats.pending}
                         color="bg-warning-500"
+                    />
+                    <StatCard
+                        icon={Edit3}
+                        label="Pending Changes"
+                        value={stats.pendingMods}
+                        color="bg-orange-500"
                     />
                     <StatCard
                         icon={Check}
@@ -343,6 +510,30 @@ export default function DashboardPage() {
                         color="bg-accent-500"
                     />
                 </div>
+
+                {/* Pending Modifications Section */}
+                {pendingModifications.length > 0 && (
+                    <div className="mb-8">
+                        <div className="flex items-center gap-2 mb-4">
+                            <Edit3 size={20} className="text-orange-600" />
+                            <h2 className="text-xl font-semibold">Modification Requests</h2>
+                            <span className="bg-orange-100 text-orange-700 text-sm font-medium px-2 py-0.5 rounded-full">
+                                {pendingModifications.length} pending
+                            </span>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {pendingModifications.map(booking => (
+                                <ModificationReviewCard
+                                    key={booking.id}
+                                    booking={booking}
+                                    onApprove={() => handleApproveModification(booking)}
+                                    onReject={() => handleRejectModification(booking.id)}
+                                    isLoading={actionLoading}
+                                />
+                            ))}
+                        </div>
+                    </div>
+                )}
 
                 {/* My Listings Section */}
                 <div className="card mb-8">

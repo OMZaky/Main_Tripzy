@@ -15,19 +15,29 @@ import { BookingDocument } from './bookingService';
 // -------------------- Get All Users --------------------
 
 export async function getAllUsers(): Promise<User[]> {
-    const usersRef = collection(db, 'users');
-    const snapshot = await getDocs(usersRef);
-    const users = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-    } as User));
+    console.log('[Admin] Fetching all users...');
+    try {
+        const usersRef = collection(db, 'users');
+        const snapshot = await getDocs(usersRef);
+        const users = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        } as User));
 
-    // Sort client-side by createdAt descending
-    return users.sort((a, b) => {
-        const aTime = (a as any).createdAt?.toMillis?.() || 0;
-        const bTime = (b as any).createdAt?.toMillis?.() || 0;
-        return bTime - aTime;
-    });
+        // Sort client-side by createdAt descending
+        const sortedUsers = users.sort((a, b) => {
+            const aTime = (a as any).createdAt?.toMillis?.() || 0;
+            const bTime = (b as any).createdAt?.toMillis?.() || 0;
+            return bTime - aTime;
+        });
+
+        console.log(`[Admin] Found ${sortedUsers.length} users`);
+        console.log('[Admin] Users:', sortedUsers.map(u => ({ id: u.id, email: u.email, role: u.role, suspended: u.suspended })));
+        return sortedUsers;
+    } catch (error) {
+        console.error('[Admin] Error fetching users:', error);
+        throw error;
+    }
 }
 
 // -------------------- Toggle User Suspension --------------------

@@ -93,6 +93,7 @@ export interface CreatePropertyData {
     currency?: string;
     location: string;
     images: string[];
+    status?: PropertyStatus; // Optional - defaults to PENDING, but admins can set to APPROVED
 
     // Hotel fields
     starRating?: 1 | 2 | 3 | 4 | 5;
@@ -104,6 +105,8 @@ export interface CreatePropertyData {
     address?: string;
     city?: string;
     country?: string;
+    isInstantBook?: boolean;
+    propertyCategory?: string;
 
     // Flight fields
     airline?: string;
@@ -147,7 +150,8 @@ export async function createProperty(data: CreatePropertyData): Promise<string> 
         rating: 0,
         reviewCount: 0,
         isAvailable: true,
-        status: 'PENDING' as PropertyStatus, // Always PENDING for new properties
+        // Use provided status, or default to PENDING if not specified
+        status: data.status || 'PENDING' as PropertyStatus,
         createdAt: serverTimestamp(),
     };
 
@@ -159,17 +163,26 @@ export async function createProperty(data: CreatePropertyData): Promise<string> 
 
 export async function getOwnerProperties(ownerId: string): Promise<PropertyDocument[]> {
     const propertiesRef = collection(db, 'properties');
+    // Note: Removed orderBy to avoid composite index requirement - sorting client-side
     const q = query(
         propertiesRef,
-        where('ownerId', '==', ownerId),
-        orderBy('createdAt', 'desc')
+        where('ownerId', '==', ownerId)
     );
 
     const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => ({
+    const properties = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
     } as PropertyDocument));
+
+    // Sort client-side by createdAt descending
+    return properties.sort((a, b) => {
+        const aTime = a.createdAt instanceof Date ? a.createdAt.getTime() :
+            (a.createdAt as any)?.toMillis?.() || 0;
+        const bTime = b.createdAt instanceof Date ? b.createdAt.getTime() :
+            (b.createdAt as any)?.toMillis?.() || 0;
+        return bTime - aTime;
+    });
 }
 
 // -------------------- Get All Properties (Admin) --------------------
@@ -231,18 +244,40 @@ export async function getPropertyById(propertyId: string): Promise<PropertyDocum
 // -------------------- Get Pending Properties (Admin) --------------------
 
 export async function getPendingProperties(): Promise<PropertyDocument[]> {
+    console.log('[Admin] Fetching pending properties...');
     const propertiesRef = collection(db, 'properties');
+
+    // Use 'in' query to cover all potential casing variations
+    // Note: Removed orderBy to avoid composite index requirement - sorting client-side
     const q = query(
         propertiesRef,
-        where('status', '==', 'PENDING'),
-        orderBy('createdAt', 'desc')
+        where('status', 'in', ['PENDING', 'pending', 'Pending'])
     );
 
-    const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-    } as PropertyDocument));
+    try {
+        const snapshot = await getDocs(q);
+        console.log(`[Admin] Found ${snapshot.docs.length} pending properties`);
+
+        const properties = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        } as PropertyDocument));
+
+        // Sort client-side by createdAt descending
+        const sortedProperties = properties.sort((a, b) => {
+            const aTime = a.createdAt instanceof Date ? a.createdAt.getTime() :
+                (a.createdAt as any)?.toMillis?.() || 0;
+            const bTime = b.createdAt instanceof Date ? b.createdAt.getTime() :
+                (b.createdAt as any)?.toMillis?.() || 0;
+            return bTime - aTime;
+        });
+
+        console.log('[Admin] Pending properties:', sortedProperties.map(p => ({ id: p.id, title: p.title, status: p.status })));
+        return sortedProperties;
+    } catch (error) {
+        console.error('[Admin] Error fetching pending properties:', error);
+        throw error;
+    }
 }
 
 // -------------------- Status Helpers --------------------
