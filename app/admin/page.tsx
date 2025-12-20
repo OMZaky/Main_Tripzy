@@ -296,7 +296,6 @@ export default function AdminDashboardPage() {
     // Fetch data
     useEffect(() => {
         const fetchData = async () => {
-            console.log('[AdminPage] Starting data fetch...');
             try {
                 // Fetch all data in parallel
                 const [usersData, statsData, propertiesData, bookingsData] = await Promise.all([
@@ -306,27 +305,19 @@ export default function AdminDashboardPage() {
                     getAllBookings()
                 ]);
 
-                console.log('[AdminPage] Data fetched successfully:');
-                console.log('  - Users:', usersData.length);
-                console.log('  - Pending Properties:', propertiesData.length);
-                console.log('  - Bookings:', bookingsData.length);
-
                 setUsers(usersData);
                 setStats(statsData);
                 setPendingProperties(propertiesData);
                 setBookings(bookingsData);
-
-                console.log('[AdminPage] State updated successfully');
             } catch (error) {
-                console.error('[AdminPage] Error fetching admin data:', error);
-                toast.error('Failed to load admin data', 'Check console for details');
+                console.error('Error fetching admin data:', error);
+                toast.error('Failed to load admin data');
             } finally {
                 setIsLoading(false);
             }
         };
 
         if (user?.role === 'admin') {
-            console.log('[AdminPage] User is admin, fetching data...');
             fetchData();
         }
     }, [user?.role]);

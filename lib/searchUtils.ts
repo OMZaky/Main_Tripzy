@@ -74,53 +74,30 @@ export function filterHotels(filters: SearchFilters): Hotel[] {
 // -------------------- Filter Flights --------------------
 
 export function filterFlights(filters: SearchFilters): Flight[] {
-    console.log('[Flight Search] Total mockFlights:', mockFlights.length);
-    console.log('[Flight Search] Filters:', filters);
-
     // SECURITY: Only show APPROVED properties to users
     let results = mockFlights.filter(f => f.status === 'APPROVED');
-    console.log('[Flight Search] After APPROVED filter:', results.length);
-
-    // Debug: Show first few flights
-    if (mockFlights.length > 0) {
-        console.log('[Flight Search] Sample flights:', mockFlights.slice(0, 3).map(f => ({
-            origin: f.origin,
-            originCode: f.originCode,
-            destination: f.destination,
-            destinationCode: f.destinationCode,
-            status: f.status
-        })));
-    }
 
     // Origin filter - case-insensitive with trimming
     if (filters.origin) {
         const query = filters.origin.toLowerCase().trim();
-        console.log('[Flight Search] Origin filter query:', query);
         if (query.length > 0) {
-            const beforeCount = results.length;
             results = results.filter(f =>
                 f.origin.toLowerCase().trim().includes(query) ||
                 f.originCode.toLowerCase().trim().includes(query)
             );
-            console.log(`[Flight Search] After origin filter: ${results.length} (was ${beforeCount})`);
         }
     }
 
     // Destination filter - case-insensitive with trimming
     if (filters.destination) {
         const query = filters.destination.toLowerCase().trim();
-        console.log('[Flight Search] Destination filter query:', query);
         if (query.length > 0) {
-            const beforeCount = results.length;
             results = results.filter(f =>
                 f.destination.toLowerCase().trim().includes(query) ||
                 f.destinationCode.toLowerCase().trim().includes(query)
             );
-            console.log(`[Flight Search] After destination filter: ${results.length} (was ${beforeCount})`);
         }
     }
-
-    console.log('[Flight Search] Final results count:', results.length);
 
     // Cabin class - case-insensitive comparison
     if (filters.cabinClass) {

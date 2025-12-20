@@ -454,7 +454,6 @@ function SearchContent() {
 
                     {/* Results */}
                     <div className="flex-1">
-                        {console.log('[Search Page] Rendering results:', results.length, 'isLoading:', isLoading)}
                         {isLoading ? (
                             <SearchResultsSkeleton type={filters.tab} />
                         ) : results.length === 0 ? (
